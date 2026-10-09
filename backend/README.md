@@ -42,7 +42,29 @@ Run `php artisan migrate` before using the Lead endpoints. They use the current 
 - `GET /api/leads/{lead}/follow-ups` lists its chronological follow-up history.
 - `POST /api/leads/{lead}/follow-ups` requires `notes` and may include `followed_up_at` or Lead fields/items to update. Updated values are recorded with their before/after values in the follow-up.
 
-All authenticated users can currently view and update Leads. Add role-specific Sales permissions when the application's role model is introduced.
+All authenticated users can currently view and update Leads.
+
+## User Roles
+
+Supported roles follow the legacy role names: `admin`, `manager_sales`, `sales`, `manager_operasional`, `proqc`, `marketing`, `finance`, and `ceo`. Existing users have no role after migration until assigned. Admin Sistem remains a separate full-access privilege and is not an application role.
+
+Assign or clear a user's role from the backend CLI with explicit confirmation. This operational command should only be run by an authorized Admin Sistem operator:
+
+```bash
+php artisan admin:user-role sales@example.com sales
+php artisan admin:user-role sales@example.com none
+```
+
+## Quotation API
+
+Quotation endpoints require an authenticated Sales user or Admin Sistem. Other application roles cannot view, create, update, revise, or mark quotations as sent. Prices and amounts are in IDR, with no discount, tax, or shipping calculations. “Send” records the recipient email, timestamp, and sender; it does not send an email or generate a PDF.
+
+- `GET /api/quotations` lists quotations, paginated by 15.
+- `POST /api/leads/{lead}/quotations` creates the first draft for a Lead. Each item requires `product_name`, `quantity`, and `unit_price`; `details` is optional. Subtotal and total are calculated by the backend.
+- `GET /api/quotations/{quotation}` returns a quotation and its revision lineage.
+- `PATCH /api/quotations/{quotation}` updates a draft and recalculates totals. Sent quotations cannot be edited.
+- `POST /api/quotations/{quotation}/send` records sending to a required `sent_to_email`. Sending is allowed once per draft.
+- `POST /api/quotations/{quotation}/revisions` creates a new draft from the latest sent revision, preserving the prior quotation and its items.
 
 ## Learning Laravel
 

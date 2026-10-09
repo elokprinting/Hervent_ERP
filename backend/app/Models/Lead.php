@@ -49,6 +49,11 @@ class Lead extends Model
         return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class);
+    }
+
     /**
      * @param  array<int, array{product_name: string, details?: ?string, quantity: int}>  $items
      */

@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\User;
+use App\UserRole;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
@@ -27,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::before(fn (User $user): ?bool => $user->is_system_admin ? true : null);
         Gate::define('access-system-admin', fn (User $user): bool => (bool) $user->is_system_admin);
+        Gate::define('manage-quotations', fn (User $user): bool => $user->role === UserRole::Sales);
 
         RateLimiter::for('login', function (Request $request): Limit {
             $email = $request->input('email');

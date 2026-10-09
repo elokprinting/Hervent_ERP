@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\LeadFollowUpController;
+use App\Http\Controllers\QuotationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('auth')->name('api.')->group(function (): void {
@@ -12,6 +13,18 @@ Route::prefix('api')->middleware('auth')->name('api.')->group(function (): void 
         ->name('leads.follow-ups.index');
     Route::post('leads/{lead}/follow-ups', [LeadFollowUpController::class, 'store'])
         ->name('leads.follow-ups.store');
+
+    Route::prefix('quotations')->middleware('can:manage-quotations')->name('quotations.')->group(function (): void {
+        Route::get('/', [QuotationController::class, 'index'])->name('index');
+        Route::get('/{quotation}', [QuotationController::class, 'show'])->name('show');
+        Route::patch('/{quotation}', [QuotationController::class, 'update'])->name('update');
+        Route::post('/{quotation}/send', [QuotationController::class, 'send'])->name('send');
+        Route::post('/{quotation}/revisions', [QuotationController::class, 'revise'])->name('revisions.store');
+    });
+
+    Route::post('leads/{lead}/quotations', [QuotationController::class, 'store'])
+        ->middleware('can:manage-quotations')
+        ->name('leads.quotations.store');
 });
 
 Route::middleware('guest')->group(function (): void {

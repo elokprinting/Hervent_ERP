@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\UserRole;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -29,6 +30,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'is_system_admin' => 'boolean',
             'password' => 'hashed',
+            'role' => UserRole::class,
         ];
     }
 
@@ -45,5 +47,15 @@ class User extends Authenticatable
     public function leadFollowUps(): HasMany
     {
         return $this->hasMany(LeadFollowUp::class);
+    }
+
+    public function createdQuotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class, 'created_by_user_id');
+    }
+
+    public function sentQuotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class, 'sent_by_user_id');
     }
 }

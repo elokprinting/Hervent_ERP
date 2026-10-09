@@ -21,6 +21,29 @@ Laravel is a web application framework with expressive, elegant syntax. We belie
 
 Laravel is accessible, powerful, and provides tools required for large, robust applications.
 
+## System Administrator Access
+
+After migrating the database, grant system administrator access to an existing user from the backend directory:
+
+```bash
+php artisan admin:system-access admin@example.com grant
+```
+
+The command asks for confirmation before changing access. Use `revoke` to remove it; the last system administrator cannot be revoked. Admin System requires login, the `is_system_admin` authorization flag, and recent password confirmation. The confirmation window uses Laravel's `AUTH_PASSWORD_TIMEOUT` setting (three hours by default). There is no public registration or self-service privilege escalation.
+
+## Lead API
+
+Run `php artisan migrate` before using the Lead endpoints. They use the current authenticated web session and return JSON; write requests must include Laravel's CSRF token.
+
+- `GET /api/leads` lists Leads, paginated by 15.
+- `POST /api/leads` creates customer details, a deadline, a PIC user, and one or more product/need items (`product_name`, `quantity`, optional `details`).
+- `GET /api/leads/{lead}` returns Lead details and follow-up history.
+- `PATCH /api/leads/{lead}` updates supplied Lead fields. Supplying `items` replaces the complete item list.
+- `GET /api/leads/{lead}/follow-ups` lists its chronological follow-up history.
+- `POST /api/leads/{lead}/follow-ups` requires `notes` and may include `followed_up_at` or Lead fields/items to update. Updated values are recorded with their before/after values in the follow-up.
+
+All authenticated users can currently view and update Leads. Add role-specific Sales permissions when the application's role model is introduced.
+
 ## Learning Laravel
 
 Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.

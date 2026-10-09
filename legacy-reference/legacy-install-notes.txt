@@ -1,0 +1,14 @@
+HERVENT - HISTORICAL LEGACY INSTALL NOTES
+
+This note is retained only to document the former deployment shape. Host,
+database name, database username, and password were intentionally omitted.
+
+1. The old application was deployed as a PHP application under a web folder.
+2. Database settings were configured in db.php.
+3. The uploads folder required write access for uploaded order images.
+4. jenis_cetak_api.php could create print_type_product_map, or the separate
+   database/migration_fitur_item_jenis_cetak.sql could be applied manually.
+5. Login and application records were read from the legacy database tables.
+
+These instructions are historical and do not apply to the new Laravel project.
+Do not deploy the copied endpoints or connect them to a production database.

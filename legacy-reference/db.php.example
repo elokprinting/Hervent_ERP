@@ -1,0 +1,23 @@
+<?php
+$db_host = getenv('LEGACY_DB_HOST') ?: 'localhost';
+$db_name = getenv('LEGACY_DB_NAME') ?: '';
+$db_user = getenv('LEGACY_DB_USER') ?: '';
+$db_pass = getenv('LEGACY_DB_PASSWORD') ?: '';
+
+try {
+    $pdo = new PDO(
+        "mysql:host={$db_host};dbname={$db_name};charset=utf8mb4",
+        $db_user,
+        $db_pass,
+        array(
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false
+        )
+    );
+} catch (Throwable $e) {
+    http_response_code(500);
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(array('ok'=>false,'error'=>'Koneksi database gagal. Periksa konfigurasi lokal.'));
+    exit;
+}

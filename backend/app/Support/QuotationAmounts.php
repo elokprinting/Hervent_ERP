@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Models\QuotationItem;
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use OverflowException;
 
@@ -45,6 +47,36 @@ class QuotationAmounts
             'items' => $calculatedItems,
             'total' => $total,
         ];
+    }
+
+    /**
+     * @param  Collection<int, QuotationItem>  $currentItems
+     * @param  array<int, array{product_name: string, unit_price: string|int|float}>  $updatedItems
+     */
+    public function hasPricingChanges(Collection $currentItems, array $updatedItems): bool
+    {
+        $currentPrices = $currentItems
+            ->groupBy(fn ($item): string => $item->product_name)
+            ->map(fn (Collection $items): array => $items
+                ->map(fn ($item): int => $this->toCents($item->unit_price))
+                ->sort()
+                ->values()
+                ->all())
+            ->all();
+
+        $updatedPrices = collect($updatedItems)
+            ->groupBy('product_name')
+            ->map(fn (Collection $items): array => $items
+                ->map(fn (array $item): int => $this->toCents($item['unit_price']))
+                ->sort()
+                ->values()
+                ->all())
+            ->all();
+
+        ksort($currentPrices);
+        ksort($updatedPrices);
+
+        return $currentPrices !== $updatedPrices;
     }
 
     private function toCents(string|int|float $amount): int

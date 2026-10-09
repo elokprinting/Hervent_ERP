@@ -208,10 +208,13 @@ class QuotationWorkflowTest extends TestCase
 
         $revision = Quotation::query()->findOrFail($revisionResponse->json('data.id'));
 
-        $this->actingAs($sales)->patchJson("/api/quotations/{$revision->id}", [
+        $priceRevision = $this->actingAs($sales)->patchJson("/api/quotations/{$revision->id}", [
             'items' => [['product_name' => 'Produk revisi', 'quantity' => 2, 'unit_price' => '15.00']],
-        ])->assertOk()
+        ])->assertCreated()
+            ->assertJsonPath('data.revision', 3)
+            ->assertJsonPath('data.previous_quotation_id', $revision->id)
             ->assertJsonPath('data.total', '30.00');
+        $priceRevisionId = $priceRevision->json('data.id');
 
         $this->assertDatabaseHas('quotations', [
             'id' => $first->id,
@@ -222,9 +225,122 @@ class QuotationWorkflowTest extends TestCase
         $this->assertDatabaseHas('quotations', [
             'id' => $revision->id,
             'revision' => 2,
+            'status' => 'superseded',
+            'total' => '10.00',
+        ]);
+        $this->assertDatabaseHas('quotations', [
+            'id' => $priceRevisionId,
+            'revision' => 3,
             'status' => 'draft',
             'total' => '30.00',
         ]);
+    }
+
+    public function test_unit_price_change_creates_a_new_version_and_preserves_previous_prices(): void
+    {
+        $sales = $this->createSalesUser();
+        $lead = Lead::factory()->create();
+        $original = $this->createQuotation($sales, $lead);
+        $originalItemId = $original->items()->firstOrFail()->id;
+
+        $response = $this->actingAs($sales)->patchJson("/api/quotations/{$original->id}", [
+            'items' => [['product_name' => 'Produk', 'quantity' => 1, 'unit_price' => '12.00']],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.revision', 2)
+            ->assertJsonPath('data.previous_quotation_id', $original->id)
+            ->assertJsonPath('data.items.0.unit_price', '12.00');
+
+        $this->assertDatabaseHas('quotations', [
+            'id' => $original->id,
+            'status' => 'superseded',
+            'total' => '10.00',
+        ]);
+        $this->assertDatabaseHas('quotation_items', [
+            'id' => $originalItemId,
+            'quotation_id' => $original->id,
+            'unit_price' => '10.00',
+            'line_total' => '10.00',
+        ]);
+    }
+
+    public function test_quantity_change_updates_current_draft_without_creating_a_price_revision(): void
+    {
+        $sales = $this->createSalesUser();
+        $quotation = $this->createQuotation($sales, Lead::factory()->create());
+
+        $this->actingAs($sales)->patchJson("/api/quotations/{$quotation->id}", [
+            'items' => [['product_name' => 'Produk', 'quantity' => 4, 'unit_price' => '10.00']],
+        ])->assertOk()
+            ->assertJsonPath('data.revision', 1)
+            ->assertJsonPath('data.total', '40.00');
+
+        $this->assertDatabaseCount('quotations', 1);
+        $this->assertDatabaseHas('quotations', [
+            'id' => $quotation->id,
+            'status' => 'draft',
+            'total' => '40.00',
+        ]);
+    }
+
+    public function test_adding_an_item_creates_a_new_version(): void
+    {
+        $sales = $this->createSalesUser();
+        $quotation = $this->createQuotation($sales, Lead::factory()->create());
+
+        $response = $this->actingAs($sales)->patchJson("/api/quotations/{$quotation->id}", [
+            'items' => [
+                ['product_name' => 'Produk', 'quantity' => 1, 'unit_price' => '10.00'],
+                ['product_name' => 'Produk tambahan', 'quantity' => 1, 'unit_price' => '2.00'],
+            ],
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('data.revision', 2)
+            ->assertJsonCount(2, 'data.items');
+
+        $this->assertDatabaseHas('quotations', [
+            'id' => $quotation->id,
+            'status' => 'superseded',
+        ]);
+        $this->assertDatabaseCount('quotations', 2);
+    }
+
+    public function test_superseded_draft_cannot_be_sent(): void
+    {
+        $sales = $this->createSalesUser();
+        $quotation = $this->createQuotation($sales, Lead::factory()->create());
+        $newRevision = $this->actingAs($sales)->patchJson("/api/quotations/{$quotation->id}", [
+            'items' => [['product_name' => 'Produk', 'quantity' => 1, 'unit_price' => '12.00']],
+        ])->assertCreated()->json('data');
+
+        $this->actingAs($sales)->postJson("/api/quotations/{$quotation->id}/send", [
+            'sent_to_email' => 'buyer@example.test',
+        ])->assertStatus(409);
+
+        $this->actingAs($sales)->postJson("/api/quotations/{$newRevision['id']}/send", [
+            'sent_to_email' => 'buyer@example.test',
+        ])->assertOk();
+    }
+
+    public function test_quotation_history_returns_all_versions_with_items_and_actors(): void
+    {
+        $sales = $this->createSalesUser();
+        $quotation = $this->createQuotation($sales, Lead::factory()->create());
+        $revision = $this->actingAs($sales)->patchJson("/api/quotations/{$quotation->id}", [
+            'items' => [['product_name' => 'Produk', 'quantity' => 1, 'unit_price' => '12.00']],
+        ])->assertCreated()->json('data');
+
+        $this->actingAs($sales)->getJson("/api/quotations/{$revision['id']}/history")
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.revision', 1)
+            ->assertJsonPath('data.0.status', 'superseded')
+            ->assertJsonPath('data.0.items.0.unit_price', '10.00')
+            ->assertJsonPath('data.1.revision', 2)
+            ->assertJsonPath('data.1.created_by_user_id', $sales->id)
+            ->assertJsonPath('data.1.items.0.unit_price', '12.00');
     }
 
     public function test_revision_cannot_be_created_from_a_draft_quotation(): void

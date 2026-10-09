@@ -72,6 +72,17 @@ class QuotationController extends Controller
         ]);
     }
 
+    public function history(Quotation $quotation): JsonResponse
+    {
+        return response()->json([
+            'data' => Quotation::query()
+                ->where('lead_id', $quotation->lead_id)
+                ->with(['items', 'creator:id,name,email', 'sender:id,name,email'])
+                ->orderBy('revision')
+                ->get(),
+        ]);
+    }
+
     public function update(
         UpdateQuotationRequest $request,
         Quotation $quotation,
@@ -79,40 +90,77 @@ class QuotationController extends Controller
     ): JsonResponse {
         $data = $request->validated();
 
-        $quotation = DB::transaction(function () use ($data, $quotation, $amounts): Quotation {
-            $quotation = Quotation::query()->whereKey($quotation->getKey())->lockForUpdate()->firstOrFail();
+        [$quotation, $createdRevision] = DB::transaction(function () use ($request, $data, $quotation, $amounts): array {
+            $lead = Lead::query()->whereKey($quotation->lead_id)->lockForUpdate()->firstOrFail();
+            $latest = $lead->quotations()->lockForUpdate()->orderByDesc('revision')->firstOrFail();
 
-            abort_unless($quotation->status === 'draft', 409, 'Sent quotations cannot be edited. Create a new revision.');
+            abort_unless(
+                $latest->is($quotation) && $latest->status === 'draft',
+                409,
+                'Only the latest draft quotation can be edited.',
+            );
 
-            $quotation->fill(Arr::except($data, ['items']))->save();
+            $attributes = Arr::except($data, ['items']);
+            $pricingChanged = array_key_exists('items', $data)
+                && $amounts->hasPricingChanges($latest->items()->get(), $data['items']);
 
-            if (array_key_exists('items', $data)) {
-                $quotation->replaceItems($data['items'], $amounts);
+            if ($pricingChanged) {
+                $revision = $lead->quotations()->create([
+                    ...$latest->only([
+                        'customer_name',
+                        'customer_company',
+                        'customer_contact',
+                        'customer_email',
+                        'customer_address',
+                        'currency',
+                    ]),
+                    ...$attributes,
+                    'previous_quotation_id' => $latest->getKey(),
+                    'revision' => $latest->revision + 1,
+                    'status' => 'draft',
+                    'created_by_user_id' => $request->user()->getKey(),
+                ]);
+
+                $latest->forceFill(['status' => 'superseded'])->save();
+                $revision->replaceItems($data['items'], $amounts);
+
+                return [$revision, true];
             }
 
-            return $quotation;
+            $latest->fill($attributes)->save();
+
+            if (array_key_exists('items', $data)) {
+                $latest->replaceItems($data['items'], $amounts);
+            }
+
+            return [$latest, false];
         });
 
         return response()->json([
             'data' => $quotation->load(['lead:id,customer_name', 'items']),
-        ]);
+        ], $createdRevision ? 201 : 200);
     }
 
     public function send(SendQuotationRequest $request, Quotation $quotation): JsonResponse
     {
         $quotation = DB::transaction(function () use ($request, $quotation): Quotation {
-            $quotation = Quotation::query()->whereKey($quotation->getKey())->lockForUpdate()->firstOrFail();
+            $lead = Lead::query()->whereKey($quotation->lead_id)->lockForUpdate()->firstOrFail();
+            $latest = $lead->quotations()->lockForUpdate()->orderByDesc('revision')->firstOrFail();
 
-            abort_unless($quotation->status === 'draft', 409, 'Only draft quotations can be sent.');
+            abort_unless(
+                $latest->is($quotation) && $latest->status === 'draft',
+                409,
+                'Only the latest draft quotation can be sent.',
+            );
 
-            $quotation->forceFill([
+            $latest->forceFill([
                 'status' => 'sent',
                 'sent_to_email' => $request->validated('sent_to_email'),
                 'sent_at' => now(),
                 'sent_by_user_id' => $request->user()->getKey(),
             ])->save();
 
-            return $quotation;
+            return $latest;
         });
 
         return response()->json([

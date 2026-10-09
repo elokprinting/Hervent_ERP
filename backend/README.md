@@ -62,9 +62,12 @@ Quotation endpoints require an authenticated Sales user or Admin Sistem. Other a
 - `GET /api/quotations` lists quotations, paginated by 15.
 - `POST /api/leads/{lead}/quotations` creates the first draft for a Lead. Each item requires `product_name`, `quantity`, and `unit_price`; `details` is optional. Subtotal and total are calculated by the backend.
 - `GET /api/quotations/{quotation}` returns a quotation and its revision lineage.
-- `PATCH /api/quotations/{quotation}` updates a draft and recalculates totals. Sent quotations cannot be edited.
+- `GET /api/quotations/{quotation}/history` returns every version for the quotation's Lead, ordered by revision, with its items, creator, and sending details.
+- `PATCH /api/quotations/{quotation}` updates the latest draft and recalculates totals. Changing unit prices or adding/removing a product creates a new version; the prior draft remains unchanged and is marked `superseded`. Quantity or product details changes without a price change update the latest draft in place. Sent quotations cannot be edited.
 - `POST /api/quotations/{quotation}/send` records sending to a required `sent_to_email`. Sending is allowed once per draft.
 - `POST /api/quotations/{quotation}/revisions` creates a new draft from the latest sent revision, preserving the prior quotation and its items.
+
+Only the latest draft can be edited or sent. Each generated version records its creator and creation time; earlier versions and their item prices remain available in quotation history.
 
 ## Learning Laravel
 

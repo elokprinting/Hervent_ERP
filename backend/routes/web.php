@@ -17,6 +17,7 @@ Route::prefix('api')->middleware('auth')->name('api.')->group(function (): void 
     Route::prefix('quotations')->middleware('can:manage-quotations')->name('quotations.')->group(function (): void {
         Route::get('/', [QuotationController::class, 'index'])->name('index');
         Route::get('/{quotation}', [QuotationController::class, 'show'])->name('show');
+        Route::get('/{quotation}/history', [QuotationController::class, 'history'])->name('history');
         Route::patch('/{quotation}', [QuotationController::class, 'update'])->name('update');
         Route::post('/{quotation}/send', [QuotationController::class, 'send'])->name('send');
         Route::post('/{quotation}/revisions', [QuotationController::class, 'revise'])->name('revisions.store');
